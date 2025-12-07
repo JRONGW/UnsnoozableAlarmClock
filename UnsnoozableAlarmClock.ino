@@ -4,6 +4,13 @@
 //   CLK → ESP32 GPIO18
 //   DAT → ESP32 GPIO23
 //   RST → ESP32 GPIO5
+// DFPlayer Mini Connections:
+//   VCC → ESP32 5V
+//   GND → ESP32 GND  
+//   TX → ESP32 GPIO16 (MP3_RX_PIN)
+//   RX → ESP32 GPIO17 (MP3_TX_PIN)
+//   SPK_1 → Speaker Red (+)   
+//   SPK_2 → Speaker Black (-) 
 
 #if defined(ESP32)
   #ifdef ESP_IDF_VERSION_MAJOR // IDF 4+
@@ -45,13 +52,18 @@
 #include <RtcDS1302.h>
 #include <DFRobotDFPlayerMini.h>
 
-#define MP3_RX_PIN 16
-#define MP3_TX_PIN 17
+
+
+
+
 
 // DS1302 RTC pins
 #define RTC_CLK_PIN 18
 #define RTC_DAT_PIN 23
 #define RTC_RST_PIN 5
+
+#define MP3_RX_PIN 4
+#define MP3_TX_PIN 2
 
 DFRobotDFPlayerMini mp3;
 bool mp3Ready = false;
@@ -62,6 +74,8 @@ RtcDS1302<ThreeWire> rtc(myWire);
 
 // U8g2 Constructor for ELEGOO 0.96" OLED (128x64, I2C)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 22, 21);
+
+
 
 // Button pins
 #define BTN_SET 25
@@ -185,7 +199,7 @@ void setup(void)
   
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_ncenB10_tr);
-  u8g2.drawStr(0, 15, "Clock Module Active!");
+  u8g2.drawStr(0, 15, "Clock Active!");
   u8g2.setFont(u8g2_font_6x10_tr);
   char timeStr[20];
   sprintf(timeStr, "Time: %02d:%02d:%02d", currentHour, currentMinute, currentSecond);
@@ -263,32 +277,49 @@ void setup(void)
 
   // --- Initialize MP3 player (DFPlayer Mini compatible) ---
   MONITOR_SERIAL.println("Initializing MP3 player...");
+  MONITOR_SERIAL.println("  TX");
+  MONITOR_SERIAL.println("  RX");
+
   Serial2.begin(9600, SERIAL_8N1, MP3_RX_PIN, MP3_TX_PIN);
-  delay(500);
+  delay(2000);  // ← INCREASE from 500ms to 2000ms
+
+  MONITOR_SERIAL.println("Attempting connection...");
 
   if (mp3.begin(Serial2)) {
     mp3Ready = true;
-    MONITOR_SERIAL.println("MP3 player OK");
-    mp3.volume(25);   // volume 0–30
+    MONITOR_SERIAL.println("✓ MP3 player OK");
+    
+    delay(500);
+    mp3.volume(30);  // Max volume for testing
+    delay(500);
+    
+    // Test play
+    MONITOR_SERIAL.println("Testing playback...");
+    mp3.play(1);
+    delay(3000);
+    mp3.stop();
+    
   } else {
     mp3Ready = false;
-    MONITOR_SERIAL.println("MP3 player NOT found");
+    MONITOR_SERIAL.println("❌ MP3 player NOT found");
+    MONITOR_SERIAL.println("Check:");
+    MONITOR_SERIAL.println("  - SD card inserted?");
+    MONITOR_SERIAL.println("  - 0001.mp3 exists?");
+    MONITOR_SERIAL.println("  - Wiring correct?");
+    MONITOR_SERIAL.println("  - 1k resistor on RX?");
   }
 
-  
-
+  // Show result on display
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+  if (mp3Ready) {
+    u8g2.drawStr(0, 15, "MP3: OK");
+  } else {
+    u8g2.drawStr(0, 15, "MP3: FAILED");
+    u8g2.drawStr(0, 30, "Check SD/Wiring");
+  }
   u8g2.sendBuffer();
   delay(2000);
-
-  lastTimeUpdate = millis();
-  
-  MONITOR_SERIAL.println("\n=== SYSTEM READY ===");
-  MONITOR_SERIAL.print("Display: ");
-  MONITOR_SERIAL.println(displayConnected ? "OK" : "FAIL");
-  MONITOR_SERIAL.print("RTC: ");
-  MONITOR_SERIAL.println(rtcConnected ? "OK" : "FAIL");
-  MONITOR_SERIAL.print("Radar: ");
-  MONITOR_SERIAL.println(radarConnected ? "OK" : "FAIL");
 }
 
 bool isButtonPressed(int buttonIndex, int buttonPin)
@@ -355,18 +386,31 @@ void checkAlarm()
     if (!alarmRinging) {
       MONITOR_SERIAL.println("🔊 ALARM RINGING - PERSON DETECTED!");
       alarmRinging = true;
+      
+      // ADD THIS: Play MP3 track #1 on loop
+      if (mp3Ready) {
+        mp3.loop(1);  // Play first track on repeat
+        // OR use: mp3.play(1); to play once
+      }
     }
-    tone(BUZZER_PIN, 4000, 200);
+    tone(BUZZER_PIN, 4000);  // Keep buzzer as backup
   } else {
     if (alarmRinging) {
       alarmRinging = false;
       noTone(BUZZER_PIN);
+      
+      // ADD THIS: Stop MP3 playback
+      if (mp3Ready) {
+        mp3.stop();
+      }
+      MONITOR_SERIAL.println("Alarm stopped - no person detected");
     }
   }
   
   if (alarmTriggered && currentSecond == 0 && currentMinute != alarmMinute) {
     alarmTriggered = false;
     alarmRinging = false;
+    if (mp3Ready) mp3.stop();  // ADD THIS
     MONITOR_SERIAL.println("Alarm reset");
   }
 }
@@ -467,7 +511,8 @@ void updateDisplay()
   u8g2.drawStr(0, 42, str);
   
   if (presenceDetected) {
-    sprintf(str, "Person:YES %dcm", targetDistance);
+    //sprintf(str, "Person:YES %dcm", targetDistance);
+    sprintf(str, "Person:YES");
   } else {
     sprintf(str, "Person:NO");
   }
@@ -513,6 +558,17 @@ void updateDisplay()
 
 void loop()
 {
+  static unsigned long lastTest = 0;
+  
+  // // Force play every 5 seconds
+  // if (millis() - lastTest > 5000) {
+  //   lastTest = millis();
+  //   if (mp3Ready) {
+  //     Serial.println("Force playing track 1...");
+  //     mp3.play(1);
+  //   }
+  // }
+
   updateTime();
   radar.read();
   
