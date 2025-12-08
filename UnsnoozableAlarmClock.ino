@@ -8,7 +8,7 @@
 //   VCC → ESP32 5V
 //   GND → ESP32 GND  
 //   TX → ESP32 GPIO16 (MP3_RX_PIN)
-//   RX → ESP32 GPIO17 (MP3_TX_PIN)
+//   RX → ESP32 GPIO17 (MP3_TX_PIN) + 1kΩ resistor
 //   SPK_1 → Speaker Red (+)   
 //   SPK_2 → Speaker Black (-) 
 
@@ -51,19 +51,35 @@
 #include <ThreeWire.h>
 #include <RtcDS1302.h>
 #include <DFRobotDFPlayerMini.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <arduino_secrets.h>
 
+/********* WIFI *********/
+char ssid[] = SECRET_SSID;
+char pass[] = SECRET_PASS;
 
+/********* MQTT *********/
+static const char* MQTT_HOST = "mqtt.cetools.org";
+static const int   MQTT_PORT = 1884;  
+static const char* MQTT_CLIENTID = "ALARM_CLOCK_JRONG_ESP32";
+const char* mqtt_topic_subscribe = "student/CASA0019/Junrong/pressurepad";  // Subscribe to pressure pad
 
+/********* MQTT Authentication *********/
+static const char* MQTT_USER = MQTT_USERNAME;
+static const char* MQTT_PASS = MQTT_PASSWORD;
 
-
+WiFiClient wifiClient;
+PubSubClient mqtt(wifiClient);
 
 // DS1302 RTC pins
 #define RTC_CLK_PIN 18
 #define RTC_DAT_PIN 23
 #define RTC_RST_PIN 5
 
-#define MP3_RX_PIN 4
-#define MP3_TX_PIN 2
+// MP3 Player pins
+#define MP3_RX_PIN 16
+#define MP3_TX_PIN 17
 
 DFRobotDFPlayerMini mp3;
 bool mp3Ready = false;
@@ -74,8 +90,6 @@ RtcDS1302<ThreeWire> rtc(myWire);
 
 // U8g2 Constructor for ELEGOO 0.96" OLED (128x64, I2C)
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 22, 21);
-
-
 
 // Button pins
 #define BTN_SET 25
@@ -90,6 +104,10 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 22, 21);
 unsigned long lastDebounceTime[3] = {0, 0, 0};
 bool lastButtonState[3] = {HIGH, HIGH, HIGH};
 bool buttonState[3] = {HIGH, HIGH, HIGH};
+
+// Pressure pad state (received via MQTT)
+bool pressurePadPressed = false;
+unsigned long lastPressureUpdate = 0;
 
 // Menu states
 enum MenuState {
@@ -124,6 +142,141 @@ int targetDistance = 0;
 
 bool displayConnected = false;
 bool rtcConnected = false;
+bool wifiConnected = false;
+bool mqttConnected = false;
+
+unsigned long lastMQTTAttempt = 0;
+const unsigned long MQTT_RETRY_INTERVAL = 5000;
+
+// ==================== MQTT Callback ====================
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String message = "";
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  
+  MONITOR_SERIAL.print("📩 MQTT [");
+  MONITOR_SERIAL.print(topic);
+  MONITOR_SERIAL.print("]: ");
+  MONITOR_SERIAL.println(message);
+  
+  // Check if it's from the pressure pad topic
+  if (String(topic) == mqtt_topic_subscribe) {
+    if (message == "pressed") {
+      pressurePadPressed = true;
+      lastPressureUpdate = millis();
+      MONITOR_SERIAL.println("✓ Pressure pad: PRESSED");
+    } else if (message == "released") {
+      pressurePadPressed = false;
+      lastPressureUpdate = millis();
+      MONITOR_SERIAL.println("✓ Pressure pad: RELEASED");
+    }
+  }
+}
+
+// ==================== WiFi Setup ====================
+void connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  
+  MONITOR_SERIAL.print("Connecting to WiFi: ");
+  MONITOR_SERIAL.println(ssid);
+  
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+  u8g2.drawStr(0, 15, "Connecting WiFi...");
+  u8g2.sendBuffer();
+  
+  WiFi.begin(ssid, pass);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    delay(500);
+    MONITOR_SERIAL.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnected = true;
+    MONITOR_SERIAL.println("\n✓ WiFi Connected!");
+    MONITOR_SERIAL.print("IP: ");
+    MONITOR_SERIAL.println(WiFi.localIP());
+    
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tr);
+    u8g2.drawStr(0, 15, "WiFi Connected!");
+    
+    char ipStr[20];
+    sprintf(ipStr, "%d.%d.%d.%d", 
+            WiFi.localIP()[0], 
+            WiFi.localIP()[1], 
+            WiFi.localIP()[2], 
+            WiFi.localIP()[3]);
+    u8g2.drawStr(0, 30, ipStr);
+    u8g2.sendBuffer();
+    delay(2000);
+  } else {
+    wifiConnected = false;
+    MONITOR_SERIAL.println("\n✗ WiFi Failed!");
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tr);
+    u8g2.drawStr(0, 15, "WiFi Failed!");
+    u8g2.sendBuffer();
+    delay(2000);
+  }
+}
+
+// ==================== MQTT Setup ====================
+void ensureMQTT() {
+  if (mqtt.connected()) {
+    mqttConnected = true;
+    return;
+  }
+  
+  if (millis() - lastMQTTAttempt < MQTT_RETRY_INTERVAL) return;
+  
+  lastMQTTAttempt = millis();
+  
+  MONITOR_SERIAL.print("MQTT connect ");
+  MONITOR_SERIAL.print(MQTT_HOST);
+  MONITOR_SERIAL.print(":");
+  MONITOR_SERIAL.println(MQTT_PORT);
+  
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+  u8g2.drawStr(0, 15, "Connecting MQTT...");
+  u8g2.sendBuffer();
+  
+  bool ok = mqtt.connect(MQTT_CLIENTID, MQTT_USER, MQTT_PASS);
+  
+  if (ok) {
+    mqttConnected = true;
+    MONITOR_SERIAL.println("✓ MQTT Connected!");
+    
+    // Subscribe to pressure pad topic
+    mqtt.subscribe(mqtt_topic_subscribe);
+    MONITOR_SERIAL.print("Subscribed to: ");
+    MONITOR_SERIAL.println(mqtt_topic_subscribe);
+    
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tr);
+    u8g2.drawStr(0, 15, "MQTT Connected!");
+    u8g2.sendBuffer();
+    delay(1000);
+    
+  } else {
+    mqttConnected = false;
+    MONITOR_SERIAL.print("MQTT fail rc=");
+    MONITOR_SERIAL.println(mqtt.state());
+    
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tr);
+    u8g2.drawStr(0, 15, "MQTT Failed!");
+    char errorStr[20];
+    sprintf(errorStr, "rc=%d", mqtt.state());
+    u8g2.drawStr(0, 30, errorStr);
+    u8g2.sendBuffer();
+  }
+}
 
 void setup(void)
 {
@@ -158,10 +311,20 @@ void setup(void)
   u8g2.drawStr(0, 20, "HELLO!");
   u8g2.setFont(u8g2_font_6x10_tr);
   u8g2.drawStr(0, 35, "Alarm Clock");
-  u8g2.drawStr(0, 50, "Init Clock module...");
+  u8g2.drawStr(0, 50, "Init systems...");
   u8g2.sendBuffer();
   
   delay(1000);
+
+  // Initialize WiFi
+  connectWiFi();
+  
+  // Initialize MQTT
+  if (wifiConnected) {
+    mqtt.setServer(MQTT_HOST, MQTT_PORT);
+    mqtt.setCallback(mqttCallback);
+    ensureMQTT();
+  }
 
   // Initialize DS1302 RTC
   MONITOR_SERIAL.println("Initializing DS1302 RTC Module...");
@@ -174,18 +337,14 @@ void setup(void)
   
   rtc.Begin();
   
-  // Just check if RTC is running, don't force set time
   if (!rtc.GetIsRunning()) {
     MONITOR_SERIAL.println("RTC was not running, starting now");
     rtc.SetIsRunning(true);
   }
 
-  // Read current time from RTC (no forced setting)
   RtcDateTime now = rtc.GetDateTime();
-  
   rtcConnected = true;
   
-  // Load current time from RTC
   currentHour = now.Hour();
   currentMinute = now.Minute();
   currentSecond = now.Second();
@@ -199,7 +358,7 @@ void setup(void)
   
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_ncenB10_tr);
-  u8g2.drawStr(0, 15, "Clock Active!");
+  u8g2.drawStr(0, 15, "Clock Module Active!");
   u8g2.setFont(u8g2_font_6x10_tr);
   char timeStr[20];
   sprintf(timeStr, "Time: %02d:%02d:%02d", currentHour, currentMinute, currentSecond);
@@ -220,19 +379,18 @@ void setup(void)
   RADAR_SERIAL.begin(256000);
 #endif
 
-  delay(500);   // give UART + sensor some time
+  delay(500);
 
   bool ok = false;
   unsigned long start = millis();
 
-  // Try radar.begin and wait for data / connection for up to 3 seconds
   while (millis() - start < 3000) {
     if (!ok) {
       MONITOR_SERIAL.println("Calling radar.begin()...");
       ok = radar.begin(RADAR_SERIAL);
     }
 
-    radar.read();  // try to parse any incoming frames
+    radar.read();
 
     if (radar.isConnected()) {
       ok = true;
@@ -270,18 +428,15 @@ void setup(void)
   u8g2.sendBuffer();
   delay(2000);
 
-
-
-
-
-
-  // --- Initialize MP3 player (DFPlayer Mini compatible) ---
+  // --- Initialize MP3 player ---
   MONITOR_SERIAL.println("Initializing MP3 player...");
-  MONITOR_SERIAL.println("  TX");
-  MONITOR_SERIAL.println("  RX");
+  MONITOR_SERIAL.print("  RX: GPIO");
+  MONITOR_SERIAL.println(MP3_RX_PIN);
+  MONITOR_SERIAL.print("  TX: GPIO");
+  MONITOR_SERIAL.println(MP3_TX_PIN);
 
   Serial2.begin(9600, SERIAL_8N1, MP3_RX_PIN, MP3_TX_PIN);
-  delay(2000);  // ← INCREASE from 500ms to 2000ms
+  delay(2000);
 
   MONITOR_SERIAL.println("Attempting connection...");
 
@@ -290,7 +445,7 @@ void setup(void)
     MONITOR_SERIAL.println("✓ MP3 player OK");
     
     delay(500);
-    mp3.volume(30);  // Max volume for testing
+    mp3.volume(15);  // Start with lower volume
     delay(500);
     
     // Test play
@@ -320,6 +475,22 @@ void setup(void)
   }
   u8g2.sendBuffer();
   delay(2000);
+
+  lastTimeUpdate = millis();
+  
+  MONITOR_SERIAL.println("\n=== SYSTEM READY ===");
+  MONITOR_SERIAL.print("Display: ");
+  MONITOR_SERIAL.println(displayConnected ? "OK" : "FAIL");
+  MONITOR_SERIAL.print("RTC: ");
+  MONITOR_SERIAL.println(rtcConnected ? "OK" : "FAIL");
+  MONITOR_SERIAL.print("Radar: ");
+  MONITOR_SERIAL.println(radarConnected ? "OK" : "FAIL");
+  MONITOR_SERIAL.print("WiFi: ");
+  MONITOR_SERIAL.println(wifiConnected ? "OK" : "FAIL");
+  MONITOR_SERIAL.print("MQTT: ");
+  MONITOR_SERIAL.println(mqttConnected ? "OK" : "FAIL");
+  MONITOR_SERIAL.print("MP3: ");
+  MONITOR_SERIAL.println(mp3Ready ? "OK" : "FAIL");
 }
 
 bool isButtonPressed(int buttonIndex, int buttonPin)
@@ -369,7 +540,7 @@ void updateTime()
       }
     }
 
-    // Check alarm every second using currentHour/currentMinute/currentSecond
+    // Check alarm every second
     if (alarmEnabled && !alarmTriggered) {
       if (currentHour == alarmHour && currentMinute == alarmMinute && currentSecond == 0) {
         alarmTriggered = true;
@@ -379,38 +550,47 @@ void updateTime()
   }
 }
 
-
 void checkAlarm()
 {
-  if (alarmTriggered && presenceDetected && targetDistance < 100) {
+  // Alarm rings when BOTH conditions are met:
+  // 1. Alarm is triggered (time reached)
+  // 2. Person detected by radar OR pressure pad is pressed
+  bool personDetected = (presenceDetected && targetDistance < 100) || pressurePadPressed;
+  
+  if (alarmTriggered && personDetected) {
     if (!alarmRinging) {
       MONITOR_SERIAL.println("🔊 ALARM RINGING - PERSON DETECTED!");
+      if (pressurePadPressed) {
+        MONITOR_SERIAL.println("   └─ Via pressure pad");
+      }
+      if (presenceDetected) {
+        MONITOR_SERIAL.println("   └─ Via radar");
+      }
       alarmRinging = true;
       
-      // ADD THIS: Play MP3 track #1 on loop
+      // Play MP3 track
       if (mp3Ready) {
         mp3.loop(1);  // Play first track on repeat
-        // OR use: mp3.play(1); to play once
       }
     }
-    tone(BUZZER_PIN, 4000);  // Keep buzzer as backup
+    tone(BUZZER_PIN, 4000, 200);  // Keep buzzer as backup
   } else {
     if (alarmRinging) {
       alarmRinging = false;
       noTone(BUZZER_PIN);
       
-      // ADD THIS: Stop MP3 playback
+      // Stop MP3 playback
       if (mp3Ready) {
         mp3.stop();
       }
-      MONITOR_SERIAL.println("Alarm stopped - no person detected");
     }
   }
   
+  // Reset alarm after the minute passes
   if (alarmTriggered && currentSecond == 0 && currentMinute != alarmMinute) {
     alarmTriggered = false;
     alarmRinging = false;
-    if (mp3Ready) mp3.stop();  // ADD THIS
+    if (mp3Ready) mp3.stop();
     MONITOR_SERIAL.println("Alarm reset");
   }
 }
@@ -419,10 +599,17 @@ void handleButtons()
 {
   if (isButtonPressed(0, BTN_SET)) {
     if (alarmRinging) {
-      alarmTriggered = false;
-      alarmRinging = false;
-      noTone(BUZZER_PIN);
-      MONITOR_SERIAL.println("Alarm stopped by user");
+      // Can only stop alarm if person is detected
+      bool personDetected = (presenceDetected && targetDistance < 100) || pressurePadPressed;
+      if (personDetected) {
+        alarmTriggered = false;
+        alarmRinging = false;
+        noTone(BUZZER_PIN);
+        if (mp3Ready) mp3.stop();
+        MONITOR_SERIAL.println("✓ Alarm stopped - person verified");
+      } else {
+        MONITOR_SERIAL.println("❌ Cannot stop alarm - no person detected!");
+      }
       return;
     }
     
@@ -510,17 +697,24 @@ void updateDisplay()
   sprintf(str, "Alarm:%02d:%02d %s", alarmHour, alarmMinute, alarmEnabled ? "[ON]" : "[OFF]");
   u8g2.drawStr(0, 42, str);
   
-  if (presenceDetected) {
-    //sprintf(str, "Person:YES %dcm", targetDistance);
-    sprintf(str, "Person:YES");
+  // Show pressure pad OR radar status
+  if (pressurePadPressed) {
+    sprintf(str, "Mat:PRESSED");
+  } else if (presenceDetected) {
+    sprintf(str, "Radar:YES %dcm", targetDistance);
   } else {
-    sprintf(str, "Person:NO");
+    sprintf(str, "Nobody detected");
   }
   u8g2.drawStr(0, 52, str);
   
   switch(currentMenu) {
     case MENU_CLOCK:
-      u8g2.drawStr(0, 63, "Alarm Clock");
+      // Show MQTT status on main screen
+      if (mqttConnected) {
+        u8g2.drawStr(0, 63, "MQTT:OK");
+      } else {
+        u8g2.drawStr(0, 63, "MQTT:OFF");
+      }
       break;
     case MENU_SET_HOUR:
       sprintf(str, "Set Clock Hour:%d", currentHour);
@@ -558,17 +752,17 @@ void updateDisplay()
 
 void loop()
 {
-  static unsigned long lastTest = 0;
+  // Maintain WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    connectWiFi();
+  }
   
-  // // Force play every 5 seconds
-  // if (millis() - lastTest > 5000) {
-  //   lastTest = millis();
-  //   if (mp3Ready) {
-  //     Serial.println("Force playing track 1...");
-  //     mp3.play(1);
-  //   }
-  // }
-
+  // Maintain MQTT connection
+  ensureMQTT();
+  
+  // Process MQTT messages
+  mqtt.loop();
+  
   updateTime();
   radar.read();
   
@@ -598,7 +792,7 @@ void loop()
 
     targetDistance = distance;
 
-    // HERE: redefine "presenceDetected" to mean "person closer than 100cm"
+    // Redefine "presenceDetected" to mean "person closer than 100cm"
     if (rawPresence && targetDistance > 0 && targetDistance < 100) {
       presenceDetected = true;
     } else {
@@ -606,7 +800,6 @@ void loop()
     }
   }
 
-  
   handleButtons();
   checkAlarm();
   updateDisplay();
