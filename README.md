@@ -18,7 +18,7 @@
 # Video of Progress
 
 - Radar Person Detect:
-- <img width="766" height="456" alt="image" src="https://github.com/user-attachments/assets/c1772a19-acb1-4026-a5eb-5299f8966362" />
+- <img width="766" height="526" alt="image" src="https://github.com/user-attachments/assets/c1772a19-acb1-4026-a5eb-5299f8966362" />
 - https://www.youtube.com/watch?v=DdHfjPsBJfA
 
 - Pressue pad:
