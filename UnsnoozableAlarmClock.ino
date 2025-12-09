@@ -7,14 +7,14 @@
 // DFPlayer Mini Connections:
 //   VCC → ESP32 5V
 //   GND → ESP32 GND  
-//   TX → ESP32 GPIO16 (MP3_RX_PIN)
-//   RX → ESP32 GPIO17 (MP3_TX_PIN) + 1kΩ resistor
+//   TX → ESP32 GPIO2 (MP3_RX_PIN)
+//   RX → ESP32 GPIO4 (MP3_TX_PIN)
 //   SPK_1 → Speaker Red (+)   
 //   SPK_2 → Speaker Black (-) 
 
 #if defined(ESP32)
   #ifdef ESP_IDF_VERSION_MAJOR // IDF 4+
-    #if CONFIG_IDF_TARGET_ESP32 // ESP32/PICO-D4
+    #if CONFIG_IxDF_TARGET_ESP32 // ESP32/PICO-D4
       #define MONITOR_SERIAL Serial
       #define RADAR_SERIAL Serial1
       #define RADAR_RX_PIN 33
@@ -53,17 +53,17 @@
 #include <DFRobotDFPlayerMini.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include <arduino_secrets.h>
+#include "arduino_secrets.h"
 
 /********* WIFI *********/
-char ssid[] = SECRET_SSID;
-char pass[] = SECRET_PASS;
+const char* ssid = SECRET_SSID;
+const char* pass = SECRET_PASS;
 
 /********* MQTT *********/
 static const char* MQTT_HOST = "mqtt.cetools.org";
 static const int   MQTT_PORT = 1884;  
 static const char* MQTT_CLIENTID = "ALARM_CLOCK_JRONG_ESP32";
-const char* mqtt_topic_subscribe = "student/CASA0019/Junrong/pressurepad";  // Subscribe to pressure pad
+const char* mqtt_topic_subscribe = "student/CASA0019/Junrong/pressurepad";
 
 /********* MQTT Authentication *********/
 static const char* MQTT_USER = MQTT_USERNAME;
@@ -77,9 +77,8 @@ PubSubClient mqtt(wifiClient);
 #define RTC_DAT_PIN 23
 #define RTC_RST_PIN 5
 
-// MP3 Player pins
-#define MP3_RX_PIN 16
-#define MP3_TX_PIN 17
+#define MP3_RX_PIN 4
+#define MP3_TX_PIN 2
 
 DFRobotDFPlayerMini mp3;
 bool mp3Ready = false;
@@ -204,14 +203,6 @@ void connectWiFi() {
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tr);
     u8g2.drawStr(0, 15, "WiFi Connected!");
-    
-    char ipStr[20];
-    sprintf(ipStr, "%d.%d.%d.%d", 
-            WiFi.localIP()[0], 
-            WiFi.localIP()[1], 
-            WiFi.localIP()[2], 
-            WiFi.localIP()[3]);
-    u8g2.drawStr(0, 30, ipStr);
     u8g2.sendBuffer();
     delay(2000);
   } else {
@@ -271,9 +262,6 @@ void ensureMQTT() {
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tr);
     u8g2.drawStr(0, 15, "MQTT Failed!");
-    char errorStr[20];
-    sprintf(errorStr, "rc=%d", mqtt.state());
-    u8g2.drawStr(0, 30, errorStr);
     u8g2.sendBuffer();
   }
 }
@@ -327,7 +315,7 @@ void setup(void)
   }
 
   // Initialize DS1302 RTC
-  MONITOR_SERIAL.println("Initializing DS1302 RTC Module...");
+  MONITOR_SERIAL.println("Initializing RTC Module...");
   MONITOR_SERIAL.print("  CLK: GPIO");
   MONITOR_SERIAL.println(RTC_CLK_PIN);
   MONITOR_SERIAL.print("  DAT: GPIO");
@@ -358,7 +346,7 @@ void setup(void)
   
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_ncenB10_tr);
-  u8g2.drawStr(0, 15, "Clock Module Active!");
+  u8g2.drawStr(0, 15, "Clock on!");
   u8g2.setFont(u8g2_font_6x10_tr);
   char timeStr[20];
   sprintf(timeStr, "Time: %02d:%02d:%02d", currentHour, currentMinute, currentSecond);
@@ -419,7 +407,7 @@ void setup(void)
             radar.firmware_bugfix_version);
     u8g2.drawStr(0, 30, fwStr);
   } else {
-    MONITOR_SERIAL.println(F("Radar: FAILED (no connection)"));
+    MONITOR_SERIAL.println(F("Radar: FAILED"));
 
     u8g2.drawStr(0, 15, "Radar Error");
     u8g2.drawStr(0, 30, "Check wiring / reboot");
@@ -445,7 +433,7 @@ void setup(void)
     MONITOR_SERIAL.println("✓ MP3 player OK");
     
     delay(500);
-    mp3.volume(15);  // Start with lower volume
+    mp3.volume(15);
     delay(500);
     
     // Test play
@@ -461,7 +449,7 @@ void setup(void)
     MONITOR_SERIAL.println("  - SD card inserted?");
     MONITOR_SERIAL.println("  - 0001.mp3 exists?");
     MONITOR_SERIAL.println("  - Wiring correct?");
-    MONITOR_SERIAL.println("  - 1k resistor on RX?");
+    MONITOR_SERIAL.println("  - Power supply adequate (5V 2A)?");
   }
 
   // Show result on display
@@ -471,7 +459,7 @@ void setup(void)
     u8g2.drawStr(0, 15, "MP3: OK");
   } else {
     u8g2.drawStr(0, 15, "MP3: FAILED");
-    u8g2.drawStr(0, 30, "Check SD/Wiring");
+    u8g2.drawStr(0, 30, "Check Power/SD");
   }
   u8g2.sendBuffer();
   delay(2000);
@@ -570,6 +558,7 @@ void checkAlarm()
       
       // Play MP3 track
       if (mp3Ready) {
+        mp3.volume(30);
         mp3.loop(1);  // Play first track on repeat
       }
     }
@@ -577,6 +566,7 @@ void checkAlarm()
   } else {
     if (alarmRinging) {
       alarmRinging = false;
+      alarmTriggered = false;
       noTone(BUZZER_PIN);
       
       // Stop MP3 playback
@@ -586,13 +576,13 @@ void checkAlarm()
     }
   }
   
-  // Reset alarm after the minute passes
-  if (alarmTriggered && currentSecond == 0 && currentMinute != alarmMinute) {
-    alarmTriggered = false;
-    alarmRinging = false;
-    if (mp3Ready) mp3.stop();
-    MONITOR_SERIAL.println("Alarm reset");
-  }
+  // // Reset alarm after the minute passes
+  // if (alarmTriggered && currentSecond == 0 && currentMinute != alarmMinute) {
+  //   alarmTriggered = false;
+  //   alarmRinging = false;
+  //   if (mp3Ready) mp3.stop();
+  //   MONITOR_SERIAL.println("Alarm reset");
+  // }
 }
 
 void handleButtons()
@@ -698,22 +688,28 @@ void updateDisplay()
   u8g2.drawStr(0, 42, str);
   
   // Show pressure pad OR radar status
-  if (pressurePadPressed) {
-    sprintf(str, "Mat:PRESSED");
-  } else if (presenceDetected) {
-    sprintf(str, "Radar:YES %dcm", targetDistance);
-  } else {
-    sprintf(str, "Nobody detected");
+  if (pressurePadPressed&&(presenceDetected && targetDistance < 100)) {
+    sprintf(str, "Mat:PRESSED | Human detected");
+  } else if (pressurePadPressed&&!(presenceDetected && targetDistance < 100)) {
+    sprintf(str, "Mat:PRESSED | Nobody detected");
+  } else if (!pressurePadPressed&&!(presenceDetected && targetDistance < 100)) {
+    sprintf(str, "Mat:RELEASED | Nobody detected");
+  } else if (!pressurePadPressed&& (presenceDetected && targetDistance < 100)) {
+    sprintf(str, "Mat:RELEASED | Human detected");
   }
   u8g2.drawStr(0, 52, str);
   
   switch(currentMenu) {
     case MENU_CLOCK:
-      // Show MQTT status on main screen
-      if (mqttConnected) {
-        u8g2.drawStr(0, 63, "MQTT:OK");
-      } else {
-        u8g2.drawStr(0, 63, "MQTT:OFF");
+      // Show MQTT and MP3 status on main screen
+      if (mqttConnected && mp3Ready) {
+        u8g2.drawStr(0, 63, "MQTT:OK | MP3:OK");
+      } else if (!mqttConnected && mp3Ready) {
+        u8g2.drawStr(0, 63, "MQTT:OFF | MP3:OK");
+      } else if (!mqttConnected && !mp3Ready) {
+        u8g2.drawStr(0, 63, "MQTT:OFF | MP3:OFF");
+      } else if (mqttConnected && !mp3Ready) {
+        u8g2.drawStr(0, 63, "MQTT:OK | MP3:OFF");
       }
       break;
     case MENU_SET_HOUR:
