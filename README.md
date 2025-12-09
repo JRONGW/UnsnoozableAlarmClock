@@ -18,11 +18,13 @@
 # Video of Progress
 
 Radar Person Detect:
-<img width="122" height="190" alt="image" src="https://www.youtube.com/watch?v=DdHfjPsBJfA" />
+[<img width="122" height="190" alt="image" src="https://www.youtube.com/watch?v=DdHfjPsBJfA" />
+](https://www.youtube.com/watch?v=DdHfjPsBJfA)
+
 
 Pressue pad:
-https://github.com/user-attachments/assets/b0937933-bc55-468b-9377-7d1f1f2e085a
+[https://github.com/user-attachments/assets/b0937933-bc55-468b-9377-7d1f1f2e085a
 
-<img width="114" height="110" alt="screenshot" src="https://github.com/user-attachments/assets/b04b7198-1a45-4b83-b5b4-2d38504dfdb8" />
+<img width="114" height="110" alt="screenshot" src="https://github.com/user-attachments/assets/b04b7198-1a45-4b83-b5b4-2d38504dfdb8" />](https://www.youtube.com/shorts/LzBAYvfItaQ)
 
 
