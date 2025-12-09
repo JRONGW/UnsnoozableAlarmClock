@@ -23,5 +23,7 @@
 
 - Pressue pad:
 - <img width="766" height="442" alt="image" src="https://github.com/user-attachments/assets/fd29df72-b912-43bb-a3ce-2dd5f3ac6f5d" />
+- <img width="766" height="450" alt="image" src="https://github.com/user-attachments/assets/947cc90a-a503-42fa-ae63-a1a6c278a519" />
+
 
 - https://www.youtube.com/shorts/LzBAYvfItaQ
