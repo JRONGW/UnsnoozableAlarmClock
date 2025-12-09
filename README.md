@@ -22,5 +22,6 @@
 - https://www.youtube.com/watch?v=DdHfjPsBJfA
 
 - Pressue pad:
-- <img width="766" height="456" alt="image" src="https://github.com/user-attachments/assets/930653f9-2f71-41bf-867f-27f43532497b" />
+- <img width="766" height="442" alt="image" src="https://github.com/user-attachments/assets/fd29df72-b912-43bb-a3ce-2dd5f3ac6f5d" />
+
 - https://www.youtube.com/shorts/LzBAYvfItaQ
