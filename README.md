@@ -24,6 +24,13 @@
 
 - The alarm clock and the pressure pad part are powered by 5v adaptors.
 
+- Iteration 1
+<img width="1898" height="720" alt="iteration1withonlybuzzer" src="https://github.com/user-attachments/assets/ed801cff-1f3a-4d86-86c2-e6dd91d128f1" />
+
+- Iteration 2
+<img width="1914" height="1156" alt="iteration2withonlymp3player" src="https://github.com/user-attachments/assets/e5945026-9ccb-44cb-9e53-f1cdd4821ea6" />
+
+
 
 
 # Video of Progress
@@ -42,5 +49,7 @@ https://www.youtube.com/watch?v=DdHfjPsBJfA
 # Progress
 
 ![insideufo6](https://github.com/user-attachments/assets/5bf15711-e75d-415e-af2e-6b18d4906c71)
+
+
 
 
