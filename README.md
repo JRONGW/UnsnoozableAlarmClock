@@ -1,5 +1,8 @@
 # Unsnoozable Alarm Clock
 
+<img width="1002" height="904" alt="ufocutout" src="https://github.com/user-attachments/assets/c77d7d3f-5ab7-40cc-94ef-70c573640b7d" />
+
+
 
 - The unsnoozable alarm clock uses a radar sensor to detect if a person is lying on the bed.
 - It rings the alarm when alarm clock reaches and the person is present.
@@ -12,8 +15,11 @@
 - Set the time with the 3 buttons: set, up, and down. 'Set' button would change the the set mode from real time hour, real time minute, alarm time hour, alarm time minute, and alarm on or off.
 - 
 - The pressure pad is separated from the clock, it will detect the pressure on pressure pad and send the status pressed/releaesed to MQTT.
+- 
 - The pressure pad status can be get by the alarm clock and be a condition of the alarm.
-- The alarm clock and the pressure pad part are powered by 5v adaptors. 
+- 
+- The alarm clock and the pressure pad part are powered by 5v adaptors.
+- 
 
 # Video of Progress
 
@@ -27,3 +33,10 @@
 
 
 - https://www.youtube.com/shorts/LzBAYvfItaQ
+
+# Progress
+
+- ![insideufo6](https://github.com/user-attachments/assets/5bf15711-e75d-415e-af2e-6b18d4906c71)
+
+- 
+
