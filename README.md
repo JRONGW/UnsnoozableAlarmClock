@@ -9,14 +9,14 @@
 - It would not stop until the person leave the bed.
 
 - An improved version is that the pressure pad is added to detect if the person is lying, so the pressure pad is pressed.
-- If the pressure pad is pressed or the person is deteted by the radar, the alarm would keep ringing.
+- If the pressure pad is pressed or the person is deteted by the radar, the alarm would keep ringing. Otherwise, it would stop ringing (person not detected by radar and the pad is not pressed).
 
 ### Instruction for users
-- Set the time with the 3 buttons: set, up, and down. 'Set' button would change the the set mode from real time hour, real time minute, alarm time hour, alarm time minute, and alarm on or off.
+- Set the time with the 3 buttons: set, up, and down. 'Set' button would change the set mode from real time hour, real time minute, alarm time hour, alarm time minute, and alarm on or off. In the final version, pressing the 'Set' button can lead you to the real time setting, with another long press to confirm the setting. The continuous hitting of 'Up' or 'Down' button can change the number continuously without re-hitting once a time.
 
 - The pressure pad is separated from the clock, it will detect the pressure on pressure pad and send the status pressed/releaesed to MQTT.
 
-- The pressure pad status can be get by the alarm clock and be a condition of the alarm.
+- The pressure pad status can be obtained by the alarm clock and be a condition of the alarm.
 
 - The alarm clock and the pressure pad part are powered by 5v adaptors.
 
