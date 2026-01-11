@@ -43,7 +43,7 @@
 
 - https://www.youtube.com/shorts/LzBAYvfItaQ
 
-# Progress
+# Circuit Progress
 
 ![insideufo6](https://github.com/user-attachments/assets/5bf15711-e75d-415e-af2e-6b18d4906c71)
 
