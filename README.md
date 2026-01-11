@@ -13,13 +13,13 @@
 
 ### Instruction for users
 - Set the time with the 3 buttons: set, up, and down. 'Set' button would change the the set mode from real time hour, real time minute, alarm time hour, alarm time minute, and alarm on or off.
-- 
+
 - The pressure pad is separated from the clock, it will detect the pressure on pressure pad and send the status pressed/releaesed to MQTT.
-- 
+
 - The pressure pad status can be get by the alarm clock and be a condition of the alarm.
-- 
+
 - The alarm clock and the pressure pad part are powered by 5v adaptors.
-- 
+
 
 # Video of Progress
 
@@ -38,5 +38,5 @@
 
 - ![insideufo6](https://github.com/user-attachments/assets/5bf15711-e75d-415e-af2e-6b18d4906c71)
 
-- 
+- <img width="2406" height="838" alt="topbottom" src="https://github.com/user-attachments/assets/633cd10a-90d6-489c-858f-4287c7ee0139" />
 
