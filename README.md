@@ -1,5 +1,8 @@
 # Unsnoozable Alarm Clock
 
+<img width="3070" height="3000" alt="Alarmclockcutouttop" src="https://github.com/user-attachments/assets/e4edf499-d2b6-4f34-b4c9-edf85be1b4bd" />
+
+
 <img width="1002" height="904" alt="ufocutout" src="https://github.com/user-attachments/assets/c77d7d3f-5ab7-40cc-94ef-70c573640b7d" />
 
 
