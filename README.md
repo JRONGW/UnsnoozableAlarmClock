@@ -26,10 +26,6 @@
 # Iteration 2
 <img width="1914" height="1156" alt="iteration2withonlymp3player" src="https://github.com/user-attachments/assets/e5945026-9ccb-44cb-9e53-f1cdd4821ea6" />
 
-# Final Iteration
-<img width="2388" height="1640" alt="screenshotufo" src="https://github.com/user-attachments/assets/5a8d1f50-6ed9-45e5-81dd-d7f167bb591b" />
-[https://youtu.be/rHgdz_P1Rgc](https://www.youtube.com/watch?v=OdzALBfLdlw)
-
 # Video of Progress
 
 - Radar Person Detect:
@@ -47,6 +43,10 @@
 # Circuit Progress
 
 ![insideufo6](https://github.com/user-attachments/assets/5bf15711-e75d-415e-af2e-6b18d4906c71)
+
+# Final Iteration
+<img width="2388" height="1640" alt="screenshotufo" src="https://github.com/user-attachments/assets/5a8d1f50-6ed9-45e5-81dd-d7f167bb591b" />
+[https://youtu.be/rHgdz_P1Rgc](https://www.youtube.com/watch?v=OdzALBfLdlw)
 
 
 
